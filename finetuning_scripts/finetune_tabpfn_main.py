@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+DIR_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 import logging
 import random
 import time
@@ -181,6 +184,7 @@ def fine_tune_tabpfn(
         version="v2",
         download=True,
         model_seed=random_seed,
+        finetune=True,
     )
     model.criterion = criterion
     checkpoint_config = checkpoint_config.__dict__
@@ -331,6 +335,11 @@ def fine_tune_tabpfn(
     )
 
     # Fine-Tuning Loop
+    for name, param in model.named_parameters():
+        if 'lora' in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
     early_stop_no_imp = False
     early_stop_no_time = False
     gradient_accumulation_steps = (
@@ -707,16 +716,19 @@ def _tore_down_tuning(
     # -- Final Report
     best_step = np.argmin([x.validation_loss for x in step_results_over_time])
     fine_tuning_report = f"""=== Fine-Tuning Report for TabPFN ===
-        \tTotal Time Spent: {time.time() - st_time}
-        \tInitial Validation Loss: \t {step_results_over_time[0].validation_loss}
-        \tBest Validation Loss: \t {step_results_over_time[-1].best_validation_loss}
-        \tTotal Steps: {len(step_results_over_time)}
-        \tBest Step: {best_step}
-        \tEarly Stopping Reason: {es_reason}
-        \tAvg. Time per Step: {(time.time() - st_time) / len(step_results_over_time)}
-        \tAvg. Device Utilization: {np.mean([step.device_utilization for step in step_results_over_time])}
-        """
+    - Total Time Spent       : {time.time() - st_time}
+    - Initial Validation Loss: {step_results_over_time[0].validation_loss}
+    - Best Validation Loss   : {step_results_over_time[-1].best_validation_loss}
+    - Total Steps            : {len(step_results_over_time)}
+    - Best Step              : {best_step}
+    - Early Stopping Reason  : {es_reason}
+    - Avg. Time per Step     : {(time.time() - st_time) / len(step_results_over_time)}
+    - Avg. Device Utilization: {np.mean([step.device_utilization for step in step_results_over_time])}"""
     logger.info(fine_tuning_report)
+    # 将fine_tuning_report保存到本地txt文件
+    report_file_path = os.path.join(DIR_PATH, f"fine_tuning_report/fine_tuning_report.txt")
+    with open(report_file_path, "a", encoding="utf-8") as f:
+        f.write(fine_tuning_report + "\n")
 
     if show_training_curve:
         # --- Short Plot Hack
@@ -740,47 +752,37 @@ def _tore_down_tuning(
                 "step": range(len(train_loss_over_time)),
             },
         )
-        sns_plot_df = plot_df.melt(
-            id_vars="step",
-            value_vars=["train_loss", "validation_loss"],
-            var_name="loss_type",
-            value_name="loss",
-        )
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax = sns.lineplot(
-            data=sns_plot_df,
-            x="step",
-            y="loss",
-            hue="loss_type",
-            ax=ax,
-            linewidth=3,
-        )
-        ax.axvline(
-            x=best_step,
-            color="red",
-            linestyle="--",
-            linewidth=2,
-            label="Best Step",
-        )
-        ax.legend(title="Legend")
-
+        
+        # Create dual y-axis plot
+        fig, ax1 = plt.subplots(figsize=(12, 6))
+        ax2 = ax1.twinx()
+        
+        # Plot training loss (left y-axis)
+        color1 = 'tab:blue'
+        ax1.plot(plot_df['step'], plot_df['train_loss'], color=color1, linewidth=3, label='Training Loss')
+        ax1.set_xlabel('Steps')
+        ax1.set_ylabel('Training Loss', color=color1)
+        ax1.tick_params(axis='y', labelcolor=color1)
+        
+        # Plot validation loss (right y-axis)
+        color2 = 'tab:orange'
+        ax2.plot(plot_df['step'], plot_df['validation_loss'], color=color2, linewidth=3, label='Validation Loss')
+        ax2.set_ylabel('Validation Loss', color=color2)
+        ax2.tick_params(axis='y', labelcolor=color2)
+        
+        # Add best step marker
+        ax1.axvline(x=best_step, color="red", linestyle="--", linewidth=2, label="Best Step")
+        
+        # If using gradient accumulation, add raw training loss
         if fts.update_every_n_steps > 1:
-            sns_plot_df = plot_df.melt(
-                id_vars="step",
-                value_vars=["raw_train_loss"],
-                var_name="loss_type",
-                value_name="loss",
-            )
-            sns.lineplot(
-                data=sns_plot_df,
-                x="step",
-                y="loss",
-                hue="loss_type",
-                ax=ax,
-                c="blue",
-                alpha=0.5,
-                linewidth=3,
-            )
+            ax1.plot(plot_df['step'], plot_df['raw_train_loss'], color=color1, alpha=0.5, linewidth=2, label='Raw Training Loss')
+        
+        # Add legend
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+        
+        plt.tight_layout()
 
-        plt.savefig(f"fine_tuning_loss_plot_{task_type}.png")
-        plt.show()
+        plt.savefig(os.path.join(DIR_PATH, f"figs/fine_tuning_loss_plot_{task_type}.png"))
+        # plt.show()
