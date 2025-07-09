@@ -57,6 +57,7 @@ def fine_tune_tabpfn(
     *,
     path_to_base_model: Path | Literal["auto"] = "auto",
     save_path_to_fine_tuned_model: Path,
+    path_to_lora_model: Path,
     # Finetuning HPs
     time_limit: int,
     finetuning_config: dict,
@@ -184,8 +185,11 @@ def fine_tune_tabpfn(
         version="v2",
         download=True,
         model_seed=random_seed,
-        finetune=True,
+        flag_finetune=True,
     )
+    if os.path.exists(path_to_lora_model):
+        checkpoint_lora = torch.load(path_to_lora_model, map_location="cpu", weights_only=None)
+        model.load_state_dict(checkpoint_lora, strict=False)
     model.criterion = criterion
     checkpoint_config = checkpoint_config.__dict__
     is_data_parallel = False
@@ -307,11 +311,11 @@ def fine_tune_tabpfn(
             grad_norm_before_clip=-1,
         ),
     )
+    state_dict = model.module.state_dict() if is_data_parallel else model.state_dict()
+    lora_state_dict = {k:v for k, v in state_dict.items() if 'lora' in k}
     torch.save(
-        dict(
-            state_dict=model.module.state_dict() if is_data_parallel else model.state_dict(),
-            config=checkpoint_config),
-        str(save_path_to_fine_tuned_model),
+        lora_state_dict,
+        str(path_to_lora_model),
     )
     logger.debug(f"Initial validation loss: {best_validation_loss}")
 
@@ -390,11 +394,11 @@ def fine_tune_tabpfn(
             )
             if is_best:
                 best_validation_loss = validation_loss
+                state_dict = model.module.state_dict() if is_data_parallel else model.state_dict()
+                lora_state_dict = {k:v for k, v in state_dict.items() if 'lora' in k}
                 torch.save(
-                    dict(
-                        state_dict=model.module.state_dict() if is_data_parallel else model.state_dict(),
-                        config=checkpoint_config),
-                    str(save_path_to_fine_tuned_model),
+                    lora_state_dict,
+                    str(path_to_lora_model),
                 )
         else:
             validation_loss = step_results_over_time[-1].validation_loss
@@ -440,6 +444,12 @@ def fine_tune_tabpfn(
         if early_stop_no_imp or early_stop_no_time:
             break
 
+    torch.save(
+        dict(
+            state_dict=model.module.state_dict() if is_data_parallel else model.state_dict(),
+            config=checkpoint_config),
+        str(save_path_to_fine_tuned_model),
+    )
     _tore_down_tuning(
         task_type=task_type,
         step_results_over_time=step_results_over_time,

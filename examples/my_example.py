@@ -103,14 +103,16 @@ def run_modelling(
             raise ValueError(f"Invalid task_type: {task_type}")
 
     save_path_to_fine_tuned_model = os.path.join(DIR_PATH, f"ckpt/fine_tuned_model_{finetune_type}_{task_type}.ckpt")
-    path_to_base_model = os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-classifier_{finetune_type}.ckpt") \
+    path_to_lora_model = os.path.join(DIR_PATH, f"ckpt/lora_model_{finetune_type}_{task_type}.ckpt")
+    path_to_base_model = os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-classifier.ckpt") \
         if task_type == "multiclass" or task_type == "binary"\
-        else os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-regressor_{finetune_type}.ckpt")
+        else os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-regressor.ckpt")
     if not os.path.exists(path_to_base_model):
         path_to_base_model = "auto"
     fine_tune_tabpfn(
         path_to_base_model=path_to_base_model,
         save_path_to_fine_tuned_model=save_path_to_fine_tuned_model,
+        path_to_lora_model=path_to_lora_model,
         # Finetuning HPs
         time_limit=time_limit,
         finetuning_config=finetuning_config,
@@ -170,9 +172,9 @@ def run_modelling(
 if __name__ == '__main__':
     # Load data
     task_type = "regression"
-    finetune_type = "lora1-4-1-5"
+    finetune_type = "lora-attn"
     if task_type == "regression":
-        data_path = '/home/fit/zhangcs/WORK/chenkq/project/dataset/grid_stability_44973.csv'
+        data_path = 'D:/0 Program/TabPFN/非时序数据集/openml/cars_44994.csv'
         data = load_data(data_path=data_path)
     else:
         X, y = load_breast_cancer(return_X_y=True, as_frame=True)
