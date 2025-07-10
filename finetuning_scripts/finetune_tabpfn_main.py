@@ -58,6 +58,7 @@ def fine_tune_tabpfn(
     path_to_base_model: Path | Literal["auto"] = "auto",
     save_path_to_fine_tuned_model: Path,
     path_to_lora_model: Path,
+    model_config: dict,
     # Finetuning HPs
     time_limit: int,
     finetuning_config: dict,
@@ -185,7 +186,7 @@ def fine_tune_tabpfn(
         version="v2",
         download=True,
         model_seed=random_seed,
-        flag_finetune=True,
+        finetune_params=model_config,
     )
     if os.path.exists(path_to_lora_model):
         checkpoint_lora = torch.load(path_to_lora_model, map_location="cpu", weights_only=None)

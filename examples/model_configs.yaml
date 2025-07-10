@@ -1,0 +1,12 @@
+data_path: "/home/fit/zhangcs/WORK/chenkq/project/dataset/grid_stability_44973.csv"
+
+NAMES:
+  task_type: "regression"
+  finetune_type: "lora-attn"
+
+MODEL:
+  LINEAR:
+    rank: 0
+  MULTI_HEAD_ATTENTION:
+    rank: 8
+    flag_lora_k: True

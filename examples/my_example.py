@@ -74,6 +74,7 @@ def run_modelling(
         data: tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series],
         task_type: str,
         finetune_type: str,
+        model_config: dict,
         ):
     X_train, X_test, y_train, y_test = data
     
@@ -104,15 +105,16 @@ def run_modelling(
 
     save_path_to_fine_tuned_model = os.path.join(DIR_PATH, f"ckpt/fine_tuned_model_{finetune_type}_{task_type}.ckpt")
     path_to_lora_model = os.path.join(DIR_PATH, f"ckpt/lora_model_{finetune_type}_{task_type}.ckpt")
-    path_to_base_model = os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-classifier.ckpt") \
+    path_to_base_model = os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-classifier_lora.ckpt") \
         if task_type == "multiclass" or task_type == "binary"\
-        else os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-regressor.ckpt")
+        else os.path.join(DIR_PATH, f"ckpt/tabpfn-v2-regressor_lora.ckpt")
     if not os.path.exists(path_to_base_model):
         path_to_base_model = "auto"
     fine_tune_tabpfn(
         path_to_base_model=path_to_base_model,
         save_path_to_fine_tuned_model=save_path_to_fine_tuned_model,
         path_to_lora_model=path_to_lora_model,
+        model_config=model_config,
         # Finetuning HPs
         time_limit=time_limit,
         finetuning_config=finetuning_config,
@@ -171,10 +173,12 @@ def run_modelling(
 
 if __name__ == '__main__':
     # Load data
-    task_type = "regression"
-    finetune_type = "lora-attn"
+    with open(os.path.join(DIR_PATH, "examples/model_configs.yaml"), "r") as file:
+        model_configs = yaml.safe_load(file)
+        print(model_configs)
+    task_type = model_configs["NAMES"]["task_type"]
     if task_type == "regression":
-        data_path = 'D:/0 Program/TabPFN/非时序数据集/openml/cars_44994.csv'
+        data_path = model_configs.pop("data_path")
         data = load_data(data_path=data_path)
     else:
         X, y = load_breast_cancer(return_X_y=True, as_frame=True)
@@ -189,12 +193,12 @@ if __name__ == '__main__':
         finetuning_config = yaml.safe_load(file)
 
     run_modelling(
-        time_limit=300,
+        time_limit=3000,
         finetuning_config=finetuning_config,
         categorical_features_index=None,
         device="cuda",
         seed=42,
         data=data,
-        task_type=task_type,
-        finetune_type=finetune_type,
+        model_config=model_configs["MODEL"],
+        **model_configs["NAMES"],
     )
