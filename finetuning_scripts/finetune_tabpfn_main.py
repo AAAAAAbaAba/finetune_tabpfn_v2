@@ -32,7 +32,7 @@ from finetuning_scripts.training_utils.training_loss import compute_loss, get_lo
 from finetuning_scripts.training_utils.validation_utils import validate_tabpfn
 from schedulefree import AdamWScheduleFree
 from tabpfn import TabPFNClassifier, TabPFNRegressor
-from tabpfn.base import load_model_criterion_config
+from tabpfn.base import load_model_criterion_config, load_lora_model
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn import DataParallel
@@ -178,7 +178,7 @@ def fine_tune_tabpfn(
         model_path = None  # type: ignore
     else:
         model_path = path_to_base_model
-    model, criterion, checkpoint_config = load_model_criterion_config(
+    model, criterion, checkpoint_config = load_lora_model(
         model_path=model_path,
         check_bar_distribution_criterion=False,
         cache_trainset_representation=False,
@@ -187,10 +187,8 @@ def fine_tune_tabpfn(
         download=True,
         model_seed=random_seed,
         finetune_params=model_config,
+        path_to_lora_model=path_to_lora_model,
     )
-    if os.path.exists(path_to_lora_model):
-        checkpoint_lora = torch.load(path_to_lora_model, map_location="cpu", weights_only=None)
-        model.load_state_dict(checkpoint_lora, strict=False)
     model.criterion = criterion
     checkpoint_config = checkpoint_config.__dict__
     is_data_parallel = False
@@ -445,6 +443,8 @@ def fine_tune_tabpfn(
         if early_stop_no_imp or early_stop_no_time:
             break
 
+    checkpoint_lora = torch.load(path_to_lora_model, map_location="cpu", weights_only=None)
+    model.load_state_dict(checkpoint_lora, strict=False)
     torch.save(
         dict(
             state_dict=model.module.state_dict() if is_data_parallel else model.state_dict(),

@@ -131,6 +131,11 @@ def run_modelling(
         use_wandb=False,
     )    
 
+    from tabpfn.config import ModelInterfaceConfig, PreprocessorConfig
+    no_preprocessing_inference_config = ModelInterfaceConfig(
+        FINGERPRINT_FEATURE=False,
+        PREPROCESS_TRANSFORMS=[PreprocessorConfig(name='none')]
+    )
     # Run Models
     results = {}
     for model_name, model in [
@@ -142,6 +147,7 @@ def run_modelling(
                 random_state=seed,
                 device=device,
                 categorical_features_indices=categorical_features_index,
+                finetune_params=model_config,
             )
         ),
         (
@@ -151,6 +157,7 @@ def run_modelling(
                 random_state=seed,
                 device=device,
                 categorical_features_indices=categorical_features_index,
+                finetune_params=model_config,
             )
         ),
     ]:
